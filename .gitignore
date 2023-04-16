@@ -9,6 +9,9 @@ image_log/
 *.ckpt
 *.safetensors
 
+gradio_pose2image_private.py
+gradio_canny2image_private.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

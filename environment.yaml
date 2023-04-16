@@ -1,4 +1,4 @@
-name: control-v11
+name: control
 channels:
   - pytorch
   - defaults
@@ -33,6 +33,3 @@ dependencies:
       - prettytable==3.6.0
       - safetensors==0.2.7
       - basicsr==1.4.2
-      - fvcore
-      - pycocotools
-      - wandb

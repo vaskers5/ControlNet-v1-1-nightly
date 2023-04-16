@@ -1,525 +1,234 @@
-# ControlNet 1.1
+# ControlNet
 
-This is the official release of ControlNet 1.1.
+Official implementation of [Adding Conditional Control to Text-to-Image Diffusion Models](https://arxiv.org/abs/2302.05543).
 
-ControlNet 1.1 has the exactly same architecture with ControlNet 1.0. 
+ControlNet is a neural network structure to control diffusion models by adding extra conditions.
 
-We promise that we will not change the neural network architecture before ControlNet 1.5 (at least, and hopefully we will never change the network architecture). Perhaps this is the best news in ControlNet 1.1.
+![img](github_page/he.png)
 
-ControlNet 1.1 includes all previous models with improved robustness and result quality. Several new models are added.
+It copys the weights of neural network blocks into a "locked" copy and a "trainable" copy. 
 
-Note that we are still working on [updating this to A1111](https://github.com/Mikubill/sd-webui-controlnet/issues/736). 
+The "trainable" one learns your condition. The "locked" one preserves your model. 
 
-This repo will be merged to [ControlNet](https://github.com/lllyasviel/ControlNet) after we make sure that everything is OK.
+Thanks to this, training with small dataset of image pairs will not destroy the production-ready diffusion models.
 
-**Note that we are actively editing this page now. The information in this page will be more detailed and finalized when ControlNet 1.1 is ready.**
+The "zero convolution" is 1×1 convolution with both weight and bias initialized as zeros. 
 
-# The Beta Test for A1111 Is Started
+Before training, all zero convolutions output zeros, and ControlNet will not cause any distortion.
 
-The A1111 plugin is: https://github.com/Mikubill/sd-webui-controlnet
+No layer is trained from scratch. You are still fine-tuning. Your original model is safe. 
 
-The discussion and bug report is: https://github.com/Mikubill/sd-webui-controlnet/issues/736
+This allows training on small-scale or even personal devices.
 
-Note that the inpaint and tile models are not supported yet.
+This is also friendly to merge/replacement/offsetting of models/weights/blocks/layers.
 
-# Model Specification
+### FAQ
 
-Starting from ControlNet 1.1, we begin to use the Standard ControlNet Naming Rules (SCNNRs) to name all models. We hope that this naming rule can improve the user experience.
+**Q:** But wait, if the weight of a conv layer is zero, the gradient will also be zero, and the network will not learn anything. Why "zero convolution" works?
 
-![img](github_docs/imgs/spec.png)
+**A:** This is not true. [See an explanation here](docs/faq.md).
 
-ControlNet 1.1 include 14 models (11 production-ready models, 2 experimental models, and 1 unfinished model):
+# Stable Diffusion + ControlNet
 
-    control_v11p_sd15_canny
-    control_v11p_sd15_mlsd
-    control_v11f1p_sd15_depth
-    control_v11p_sd15_normalbae
-    control_v11p_sd15_seg
-    control_v11p_sd15_inpaint
-    control_v11p_sd15_lineart
-    control_v11p_sd15s2_lineart_anime
-    control_v11p_sd15_openpose
-    control_v11p_sd15_scribble
-    control_v11p_sd15_softedge
-    control_v11e_sd15_shuffle
-    control_v11e_sd15_ip2p
-    control_v11u_sd15_tile
+By repeating the above simple structure 14 times, we can control stable diffusion in this way:
 
-You can download all those models from our [HuggingFace Model Page](https://huggingface.co/lllyasviel/ControlNet-v1-1/tree/main). All these models should be put in the folder "models".
+![img](github_page/sd.png)
 
-You need to download Stable Diffusion 1.5 model ["v1-5-pruned.ckpt"](https://huggingface.co/runwayml/stable-diffusion-v1-5/tree/main) and put it in the folder "models".
+Note that the way we connect layers is computational efficient. The original SD encoder does not need to store gradients (the locked original SD Encoder Block 1234 and Middle). The required GPU memory is not much larger than original SD, although many layers are added. Great!
 
-Our python codes will automatically download other annotator models like HED and OpenPose. Nevertheless, if you want to manually download these, you can download all other annotator models from [here](https://huggingface.co/lllyasviel/Annotators/tree/main). All these models should be put in folder "annotator/ckpts". 
+# Production-Ready Pretrained Models
 
-To install:
+First create a new conda environment
 
     conda env create -f environment.yaml
-    conda activate control-v11
+    conda activate control
 
-Note that if you use 8GB GPU, you need to set "save_memory = True" in "config.py".
+All models and detectors can be downloaded from [our Hugging Face page](https://huggingface.co/lllyasviel/ControlNet). Make sure that SD models are put in "ControlNet/models" and detectors are put in "ControlNet/annotator/ckpts". Make sure that you download all necessary pretrained weights and detector models from that Hugging Face page, including HED edge detection model, Midas depth estimation model, Openpose, and so on. 
 
-## ControlNet 1.1 Depth
+We provide 9 Gradio apps with these models.
 
-Control Stable Diffusion with Depth Maps.
+All test images can be found at the folder "test_imgs".
 
-Model file: control_v11f1p_sd15_depth.pth
+### News
 
-Config file: control_v11f1p_sd15_depth.yaml
+2023/02/12 - Now you can play with any community model by [Transferring the ControlNet](https://github.com/lllyasviel/ControlNet/discussions/12).
 
-Training data: Midas depth (resolution 256/384/512) + Leres Depth (resolution 256/384/512) + Zoe Depth (resolution 256/384/512). Multiple depth map generator at multiple resolution as data augmentation.
+2023/02/11 - [Low VRAM mode](docs/low_vram.md) is added. Please use this mode if you are using 8GB GPU(s) or if you want larger batch size.
 
-Acceptable Preprocessors: Depth_Midas, Depth_Leres, Depth_Zoe. This model is highly robust and can work on real depth map from rendering engines.
+## ControlNet with Canny Edge
 
-    python gradio_depth.py
+Stable Diffusion 1.5 + ControlNet (using simple Canny edge detection)
 
-Non-cherry-picked batch test with random seed 12345 ("a handsome man"):
+    python gradio_canny2image.py
 
-![img](github_docs/imgs/depth_1.png)
+The Gradio app also allows you to change the Canny edge thresholds. Just try it for more details.
 
-**Update**
+Prompt: "bird"
+![p](github_page/p1.png)
 
-2023/04/14: 72 hours ago we uploaded a wrong model "control_v11p_sd15_depth" by mistake. That model is an intermediate checkpoint during the training. That model is not converged and may cause distortion in results. We uploaded the correct depth model as "control_v11f1p_sd15_depth". The "f1" means bug fix 1. The incorrect model is removed. Sorry for the inconvenience.
+Prompt: "cute dog"
+![p](github_page/p2.png)
 
-**Improvements in Depth 1.1:**
+## ControlNet with M-LSD Lines
 
-1. The training dataset of previous cnet 1.0 has several problems including (1) a small group of greyscale human images are duplicated thousands of times (!!), causing the previous model somewhat likely to generate grayscale human images; (2) some images has low quality, very blurry, or significant JPEG artifacts; (3) a small group of images has wrong paired prompts caused by a mistake in our data processing scripts. The new model fixed all problems of the training dataset and should be more reasonable in many cases.
-2. The new depth model is a relatively unbiased model. It is not trained with some specific type of depth by some specific depth estimation method. It is not over-fitted to one preprocessor. This means this model will work better with different depth estimation, different preprocessor resolutions, or even with real depth created by 3D engines.
-3. Some reasonable data augmentations are applied to training, like random left-right flipping.
-4. The model is resumed from depth 1.0, and it should work well in all cases where depth 1.0 works well. If not, please open an issue with image, and we will take a look at your case. Depth 1.1 works well in many failure cases of depth 1.0.
-5. If you use Midas depth (the "depth" in webui plugin) with 384 preprocessor resolution, the difference between depth 1.0 and 1.1 should be minimal. However, if you try other preprocessor resolutions or other preprocessors (like leres and zoe), the depth 1.1 is expected to be a bit better than 1.0.
+Stable Diffusion 1.5 + ControlNet (using simple M-LSD straight line detection)
 
-## ControlNet 1.1 Normal
+    python gradio_hough2image.py
 
-Control Stable Diffusion with Normal Maps.
+The Gradio app also allows you to change the M-LSD thresholds. Just try it for more details.
 
-Model file: control_v11p_sd15_normalbae.pth
+Prompt: "room"
+![p](github_page/p3.png)
 
-Config file: control_v11p_sd15_normalbae.yaml
+Prompt: "building"
+![p](github_page/p4.png)
 
-Training data: [Bae's](https://github.com/baegwangbin/surface_normal_uncertainty) normalmap estimation method.
+## ControlNet with HED Boundary
 
-Acceptable Preprocessors: Normal BAE. This model can accept normal maps from rendering engines as long as the normal map follows [ScanNet's](http://www.scan-net.org/) protocol. That is to say, the color of your normal map should look like [the second column of this image](https://raw.githubusercontent.com/baegwangbin/surface_normal_uncertainty/main/figs/readme_scannet.png).
+Stable Diffusion 1.5 + ControlNet (using soft HED Boundary)
 
-Note that this method is much more reasonable than the normal-from-midas method in ControlNet 1.1. The previous method will be abandoned.
+    python gradio_hed2image.py
 
-    python gradio_normalbae.py
+The soft HED Boundary will preserve many details in input images, making this app suitable for recoloring and stylizing. Just try it for more details.
 
-Non-cherry-picked batch test with random seed 12345 ("a man made of flowers"):
+Prompt: "oil painting of handsome old man, masterpiece"
+![p](github_page/p5.png)
 
-![img](github_docs/imgs/normal_1.png)
+Prompt: "Cyberpunk robot"
+![p](github_page/p6.png)
 
-Non-cherry-picked batch test with random seed 12345 ("room"):
+## ControlNet with User Scribbles
 
-![img](github_docs/imgs/normal_2.png)
+Stable Diffusion 1.5 + ControlNet (using Scribbles)
 
-**Improvements in Normal 1.1:**
+    python gradio_scribble2image.py
 
-1. The normal-from-midas method in Normal 1.0 is neither reasonable nor physically correct. That method does not work very well in many images. The normal 1.0 model cannot interpret real normal maps created by rendering engines.
-2. This Normal 1.1 is much more reasonable because the preprocessor is trained to estimate normal maps with a relatively correct protocol (NYU-V2's visualization method). This means the Normal 1.1 can interpret real normal maps from rendering engines as long as the colors are correct (blue is front, red is left, green is top).
-3. In our test, this model is robust and can achieve similar performance to the depth model. In previous CNET 1.0, the Normal 1.0 is not very frequently used. But this Normal 2.0 is much improved and has potential to be used much more frequently.
+Note that the UI is based on Gradio, and Gradio is somewhat difficult to customize. Right now you need to draw scribbles outside the UI (using your favorite drawing software, for example, MS Paint) and then import the scribble image to Gradio. 
 
-## ControlNet 1.1 Canny
+Prompt: "turtle"
+![p](github_page/p7.png)
 
-Control Stable Diffusion with Canny Maps.
+Prompt: "hot air balloon"
+![p](github_page/p8.png)
 
-Model file: control_v11p_sd15_canny.pth
+### Interactive Interface
 
-Config file: control_v11p_sd15_canny.yaml
+We actually provide an interactive interface
 
-Training data: Canny with random thresholds.
+    python gradio_scribble2image_interactive.py
 
-Acceptable Preprocessors: Canny.
+However, because gradio is very [buggy](https://github.com/gradio-app/gradio/issues/3166) and difficult to customize, right now, user need to first set canvas width and heights and then click "Open drawing canvas" to get a drawing area. Please do not upload image to that drawing canvas. Also, the drawing area is very small; it should be bigger. But I failed to find out how to make it larger. Again, gradio is really buggy.
 
-We fixed several problems in previous training datasets.
+The below dog sketch is drawn by me. Perhaps we should draw a better dog for showcase.
 
-    python gradio_canny.py
+Prompt: "dog in a room"
+![p](github_page/p20.png)
 
-Non-cherry-picked batch test with random seed 12345 ("dog in a room"):
+## ControlNet with Fake Scribbles
 
-![img](github_docs/imgs/canny_1.png)
+Stable Diffusion 1.5 + ControlNet (using fake scribbles)
 
-**Improvements in Canny 1.1:**
+    python gradio_fake_scribble2image.py
 
-1. The training dataset of previous cnet 1.0 has several problems including (1) a small group of greyscale human images are duplicated thousands of times (!!), causing the previous model somewhat likely to generate grayscale human images; (2) some images has low quality, very blurry, or significant JPEG artifacts; (3) a small group of images has wrong paired prompts caused by a mistake in our data processing scripts. The new model fixed all problems of the training dataset and should be more reasonable in many cases.
-2. Because the Canny model is one of the most important (perhaps the most frequently used) ControlNet, we used a fund to train it on a machine with 8 Nvidia A100 80G with batchsize 8×32=256 for 3 days, spending 72×30=2160 USD (8 A100 80G with 30 USD/hour). The model is resumed from Canny 1.0.
-3. Some reasonable data augmentations are applied to training, like random left-right flipping.
-4. Although it is difficult to evaluate a ControlNet, we find Canny 1.1 is a bit more robust and a bit higher visual quality than Canny 1.0. 
+Sometimes we are lazy, and we do not want to draw scribbles. This script use the exactly same scribble-based model but use a simple algorithm to synthesize scribbles from input images.
 
-## ControlNet 1.1 MLSD
+Prompt: "bag"
+![p](github_page/p9.png)
 
-Control Stable Diffusion with M-LSD straight lines.
+Prompt: "shose" (Note that "shose" is a typo; it should be "shoes". But it still seems to work.)
+![p](github_page/p10.png)
 
-Model file: control_v11p_sd15_mlsd.pth
+## ControlNet with Human Pose
 
-Config file: control_v11p_sd15_mlsd.yaml
+Stable Diffusion 1.5 + ControlNet (using human pose)
 
-Training data: M-LSD Lines.
+    python gradio_pose2image.py
 
-Acceptable Preprocessors: MLSD.
+Apparently, this model deserves a better UI to directly manipulate pose skeleton. However, again, Gradio is somewhat difficult to customize. Right now you need to input an image and then the Openpose will detect the pose for you.
 
-We fixed several problems in previous training datasets. The model is resumed from ControlNet 1.0 and trained with 200 GPU hours of A100 80G.
+Prompt: "Chief in the kitchen"
+![p](github_page/p11.png)
 
-    python gradio_mlsd.py
+Prompt: "An astronaut on the moon"
+![p](github_page/p12.png)
 
-Non-cherry-picked batch test with random seed 12345 ("room"):
+## ControlNet with Semantic Segmentation
 
-![img](github_docs/imgs/mlsd_1.png)
+Stable Diffusion 1.5 + ControlNet (using semantic segmentation)
 
-**Improvements in MLSD 1.1:**
+    python gradio_seg2image.py
 
-1. The training dataset of previous cnet 1.0 has several problems including (1) a small group of greyscale human images are duplicated thousands of times (!!), causing the previous model somewhat likely to generate grayscale human images; (2) some images has low quality, very blurry, or significant JPEG artifacts; (3) a small group of images has wrong paired prompts caused by a mistake in our data processing scripts. The new model fixed all problems of the training dataset and should be more reasonable in many cases.
-2. We enlarged the training dataset by adding 300K more images by using MLSD to find images with more than 16 straight lines in it.
-3. Some reasonable data augmentations are applied to training, like random left-right flipping.
-4. Resumed from MLSD 1.0 with continued training with 200 GPU hours of A100 80G.
+This model use ADE20K's segmentation protocol. Again, this model deserves a better UI to directly draw the segmentations. However, again, Gradio is somewhat difficult to customize. Right now you need to input an image and then a model called Uniformer will detect the segmentations for you. Just try it for more details.
 
-## ControlNet 1.1 Scribble
+Prompt: "House"
+![p](github_page/p13.png)
 
-Control Stable Diffusion with Scribbles.
+Prompt: "River"
+![p](github_page/p14.png)
 
-Model file: control_v11p_sd15_scribble.pth
+## ControlNet with Depth
 
-Config file: control_v11p_sd15_scribble.yaml
+Stable Diffusion 1.5 + ControlNet (using depth map)
 
-Training data: Synthesized scribbles.
+    python gradio_depth2image.py
 
-Acceptable Preprocessors: Synthesized scribbles (Scribble_HED, Scribble_PIDI, etc.) or hand-drawn scribbles.
+Great! Now SD 1.5 also have a depth control. FINALLY. So many possibilities (considering SD1.5 has much more community models than SD2).
 
-We fixed several problems in previous training datasets. The model is resumed from ControlNet 1.0 and trained with 200 GPU hours of A100 80G.
+Note that different from Stability's model, the ControlNet receive the full 512×512 depth map, rather than 64×64 depth. Note that Stability's SD2 depth model use 64*64 depth maps. This means that the ControlNet will preserve more details in the depth map.
 
-    # To test synthesized scribbles
-    python gradio_scribble.py
-    # To test hand-drawn scribbles in an interactive demo
-    python gradio_interactive.py
+This is always a strength because if users do not want to preserve more details, they can simply use another SD to post-process an i2i. But if they want to preserve more details, ControlNet becomes their only choice. Again, SD2 uses 64×64 depth, we use 512×512.
 
-Non-cherry-picked batch test with random seed 12345 ("man in library"):
+Prompt: "Stormtrooper's lecture"
+![p](github_page/p15.png)
 
-![img](github_docs/imgs/scribble_1.png)
+## ControlNet with Normal Map
 
-Non-cherry-picked batch test with random seed 12345 (interactive, "the beautiful landscape"):
+Stable Diffusion 1.5 + ControlNet (using normal map)
 
-![img](github_docs/imgs/scribble_2.png)
+    python gradio_normal2image.py
 
-**Improvements in Scribble 1.1:**
+This model use normal map. Rightnow in the APP, the normal is computed from the midas depth map and a user threshold (to determine how many area is background with identity normal face to viewer, tune the "Normal background threshold" in the gradio app to get a feeling).
 
-1. The training dataset of previous cnet 1.0 has several problems including (1) a small group of greyscale human images are duplicated thousands of times (!!), causing the previous model somewhat likely to generate grayscale human images; (2) some images has low quality, very blurry, or significant JPEG artifacts; (3) a small group of images has wrong paired prompts caused by a mistake in our data processing scripts. The new model fixed all problems of the training dataset and should be more reasonable in many cases.
-2. We find out that users sometimes like to draw very thick scribbles. Because of that, we used more aggressive random morphological transforms to synthesize scribbles. This model should work well even when the scribbles are relatively thick (the maximum width of training data is 24-pixel-width scribble in a 512 canvas, but it seems to work well even for a bit wider scribbles; the minimum width is 1 pixel).
-3. Resumed from Scribble 1.0, continued with 200 GPU hours of A100 80G.
+Prompt: "Cute toy"
+![p](github_page/p17.png)
 
-## ControlNet 1.1 Soft Edge
+Prompt: "Plaster statue of Abraham Lincoln"
+![p](github_page/p18.png)
 
-Control Stable Diffusion with Soft Edges.
+Compared to depth model, this model seems to be a bit better at preserving the geometry. This is intuitive: minor details are not salient in depth maps, but are salient in normal maps. Below is the depth result with same inputs. You can see that the hairstyle of the man in the input image is modified by depth model, but preserved by the normal model. 
 
-Model file: control_v11p_sd15_softedge.pth
+Prompt: "Plaster statue of Abraham Lincoln"
+![p](github_page/p19.png)
 
-Config file: control_v11p_sd15_softedge.yaml
+## ControlNet with Anime Line Drawing
 
-Training data: SoftEdge_PIDI, SoftEdge_PIDI_safe, SoftEdge_HED, SoftEdge_HED_safe.
+We also trained a relatively simple ControlNet for anime line drawings. This tool may be useful for artistic creations. (Although the image details in the results is a bit modified, since it still diffuse latent images.)
 
-Acceptable Preprocessors: SoftEdge_PIDI, SoftEdge_PIDI_safe, SoftEdge_HED, SoftEdge_HED_safe.
+This model is not available right now. We need to evaluate the potential risks before releasing this model. Nevertheless, you may be interested in [transferring the ControlNet to any community model](https://github.com/lllyasviel/ControlNet/discussions/12).
 
-This model is significantly improved compared to previous model. All users should update as soon as possible.
-
-New in ControlNet 1.1: now we added a new type of soft edge called "SoftEdge_safe". This is motivated by the fact that HED or PIDI tends to hide a corrupted greyscale version of the original image inside the soft estimation, and such hidden patterns can distract ControlNet, leading to bad results. The solution is to use a pre-processing to quantize the edge maps into several levels so that the hidden patterns can be completely removed. The implementation is [in the 78-th line of annotator/util.py](https://github.com/lllyasviel/ControlNet-v1-1-nightly/blob/4c9560ebe7679daac53a0599a11b9b7cd984ac55/annotator/util.py#L78).
-
-The perforamce can be roughly noted as:
-
-Robustness: SoftEdge_PIDI_safe > SoftEdge_HED_safe >> SoftEdge_PIDI > SoftEdge_HED
-
-Maximum result quality: SoftEdge_HED > SoftEdge_PIDI > SoftEdge_HED_safe > SoftEdge_PIDI_safe
-
-Considering the trade-off, we recommend to use SoftEdge_PIDI by default. In most cases it works very well.
-
-    python gradio_softedge.py
-
-Non-cherry-picked batch test with random seed 12345 ("a handsome man"):
-
-![img](github_docs/imgs/softedge_1.png)
-
-**Improvements in Soft Edge 1.1:**
-
-1. Soft Edge 1.1 was called HED 1.0 in previous ControlNet.
-2. The training dataset of previous cnet 1.0 has several problems including (1) a small group of greyscale human images are duplicated thousands of times (!!), causing the previous model somewhat likely to generate grayscale human images; (2) some images has low quality, very blurry, or significant JPEG artifacts; (3) a small group of images has wrong paired prompts caused by a mistake in our data processing scripts. The new model fixed all problems of the training dataset and should be more reasonable in many cases.
-3. The Soft Edge 1.1 is significantly (in nealy 100\% cases) better than HED 1.0. This is mainly because HED or PIDI estimator tend to hide a corrupted greyscale version of original image inside the soft edge map and the previous model HED 1.0 is over-fitted to restore that hidden corrupted image rather than perform boundary-aware diffusion. The training of Soft Edge 1.1 used 75\% "safe" filtering to remove such hidden corrupted greyscale images insider control maps. This makes the Soft Edge 1.1 very robust. In out test, Soft Edge 1.1 is as usable as the depth model and has potential to be more frequently used.
-
-## ControlNet 1.1 Segmentation
-
-Control Stable Diffusion with Semantic Segmentation.
-
-Model file: control_v11p_sd15_seg.pth
-
-Config file: control_v11p_sd15_seg.yaml
-
-Training data: COCO + ADE20K.
-
-Acceptable Preprocessors: Seg_OFADE20K (Oneformer ADE20K), Seg_OFCOCO (Oneformer COCO), Seg_UFADE20K (Uniformer ADE20K), or manually created masks.
-
-Now the model can receive both type of ADE20K or COCO annotations. We find that recognizing the segmentation protocol is trivial for the ControlNet encoder and training the model of multiple segmentation protocols lead to better performance.
-
-    python gradio_seg.py
-
-Non-cherry-picked batch test with random seed 12345 (ADE20k protocol, "house"):
-
-![img](github_docs/imgs/seg_1.png)
-
-Non-cherry-picked batch test with random seed 12345 (COCO protocol, "house"):
-
-![img](github_docs/imgs/seg_2.png)
-
-**Improvements in Segmentation 1.1:**
-
-1. COCO protocol is supported. The previous Segmentation 1.0 supports about 150 colors, but Segmentation 1.1 supports another 182 colors from coco.
-2. Resumed from Segmentation 1.0. All previous inputs should still work.
-
-## ControlNet 1.1 Openpose
-
-Control Stable Diffusion with Openpose.
-
-Model file: control_v11p_sd15_openpose.pth
-
-Config file: control_v11p_sd15_openpose.yaml
-
-The model is trained and can accept the following combinations:
-
-* Openpose body
-* Openpose hand
-* Openpose face
-* Openpose body + Openpose hand
-* Openpose body + Openpose face
-* Openpose hand + Openpose face
-* Openpose body + Openpose hand + Openpose face
-
-However, providing all those combinations is too complicated. We recommend to provide the users with only two choices:
-
-* "Openpose" = Openpose body
-* "Openpose Full" = Openpose body + Openpose hand + Openpose face
-
-You can try with the demo:
-
-    python gradio_openpose.py
-
-Non-cherry-picked batch test with random seed 12345 ("man in suit"):
-
-![img](github_docs/imgs/openpose_1.png)
-
-Non-cherry-picked batch test with random seed 12345 (multiple people in the wild, "handsome boys in the party"):
-
-![img](github_docs/imgs/openpose_2.png)
-
-**Improvements in Openpose 1.1:**
-
-1. The improvement of this model is mainly based on our improved implementation of OpenPose. We carefully reviewed the difference between the pytorch OpenPose and CMU's c++ openpose. Now the processor should be more accurate, especially for hands. The improvement of processor leads to the improvement of Openpose 1.1.
-2. More inputs are supported (hand and face).
-3. The training dataset of previous cnet 1.0 has several problems including (1) a small group of greyscale human images are duplicated thousands of times (!!), causing the previous model somewhat likely to generate grayscale human images; (2) some images has low quality, very blurry, or significant JPEG artifacts; (3) a small group of images has wrong paired prompts caused by a mistake in our data processing scripts. The new model fixed all problems of the training dataset and should be more reasonable in many cases.
-
-## ControlNet 1.1 Lineart
-
-Control Stable Diffusion with Linearts.
-
-Model file: control_v11p_sd15_lineart.pth
-
-Config file: control_v11p_sd15_lineart.yaml
-
-This model is trained on awacke1/Image-to-Line-Drawings. The preprocessor can generate detailed or coarse linearts from images (Lineart and Lineart_Coarse). The model is trained with sufficient data augmentation and can receive manually drawn linearts.
-
-    python gradio_lineart.py
-
-Non-cherry-picked batch test with random seed 12345 (detailed lineart extractor, "bag"):
-
-![img](github_docs/imgs/lineart_1.png)
-
-Non-cherry-picked batch test with random seed 12345 (coarse lineart extractor, "Michael Jackson's concert"):
-
-![img](github_docs/imgs/lineart_2.png)
-
-Non-cherry-picked batch test with random seed 12345 (use manually drawn linearts, "wolf"):
-
-![img](github_docs/imgs/lineart_3.png)
-
-
-## ControlNet 1.1 Anime Lineart
-
-Control Stable Diffusion with Anime Linearts.
-
-Model file: control_v11p_sd15s2_lineart_anime.pth
-
-Config file: control_v11p_sd15s2_lineart_anime.yaml
-
-Training data and implementation details: (description removed).
-
-This model can take real anime line drawings or extracted line drawings as inputs.
-
-Some important notice:
-
-1. You need a file "anything-v3-full.safetensors" to run the demo. We will not provide the file. Please find that file on the Internet on your own.
-2. This model is trained with 3x token length and clip skip 2.
-3. This is a long prompt model. Unless you use LoRAs, results are better with long prompts.
-4. This model does not support Guess Mode.
-
-Demo:
-
-    python gradio_lineart_anime.py
-
-
-Non-cherry-picked batch test with random seed 12345 ("1girl, in classroom, skirt, uniform, red hair, bag, green eyes"):
-
-![img](github_docs/imgs/anime_3.png)
-
-Non-cherry-picked batch test with random seed 12345 ("1girl, saber, at night, sword, green eyes, golden hair, stocking"):
-
-![img](github_docs/imgs/anime_4.png)
-
-Non-cherry-picked batch test with random seed 12345 (extracted line drawing, "1girl, Castle, silver hair, dress, Gemstone, cinematic lighting, mechanical hand, 4k, 8k, extremely detailed, Gothic, green eye"):
-
-![img](github_docs/imgs/anime_6.png)
-
-## ControlNet 1.1 Shuffle
-
-Control Stable Diffusion with Content Shuffle.
-
-Model file: control_v11e_sd15_shuffle.pth
-
-Config file: control_v11e_sd15_shuffle.yaml
-
-Demo:
-
-    python gradio_shuffle.py
-
-The model is trained to reorganize images. [We use a random flow to shuffle the image and control Stable Diffusion to recompose the image.](github_docs/annotator.md#content-reshuffle)
-
-Non-cherry-picked batch test with random seed 12345 ("hong kong"):
-
-![img](github_docs/imgs/shuffle_1.png)
-
-In the 6 images on the right, the left-top one is the "shuffled" image. All others are outputs.
-
-In fact, since the ControlNet is trained to recompose images, we do not even need to shuffle the input - sometimes we can just use the original image as input.
-
-In this way, this ControlNet can be guided by prompts or other ControlNets to change the image style.
-
-Note that this method has nothing to do with CLIP vision or some other models. 
-
-This is a pure ControlNet.
-
-Non-cherry-picked batch test with random seed 12345 ("iron man"):
-
-![img](github_docs/imgs/shuffle_2.png)
-
-Non-cherry-picked batch test with random seed 12345 ("spider man"):
-
-![img](github_docs/imgs/shuffle_3.png)
-
-**Important If You Implement Your Own Inference:**
-
-Note that this ControlNet requires to add a global average pooling " x = torch.mean(x, dim=(2, 3), keepdim=True) " between the ControlNet Encoder outputs and SD Unet layers. And the ControlNet must be put only on the conditional side of cfg scale. We recommend to use the "global_average_pooling" item in the yaml file to control such behaviors.
-
-### EXTREMELY IMPORTANT
-
-Note that this ControlNet Shuffle will be the **ONE AND ONLY ONE** image stylization method that we will maintain for the robustness in a long term support. 
-
-I am going to repeat these 3 times because these are very important (stop asking me what do I think of XXX other methods):
-
-**All other CLIP image encoder, Unclip, image tokenization, and image-based prompts are essentially and fundamentally limited. All those methods do NOT (!!!) work well with user prompts or additional/multiple U-Net injections. It is IMPOSSIBLE to make those methods work well. We have GIVEN UP those methods. See also the evidence [here](https://github.com/lllyasviel/ControlNet/issues/255), [here](https://github.com/Mikubill/sd-webui-controlnet/issues/547), and much more.**
-
-**All other CLIP image encoder, Unclip, image tokenization, and image-based prompts are essentially and fundamentally limited. All those methods do NOT (!!!) work well with user prompts or additional/multiple U-Net injections. It is IMPOSSIBLE to make those methods work well. We have GIVEN UP those methods. See also the evidence [here](https://github.com/lllyasviel/ControlNet/issues/255), [here](https://github.com/Mikubill/sd-webui-controlnet/issues/547), and much more.**
-
-**All other CLIP image encoder, Unclip, image tokenization, and image-based prompts are essentially and fundamentally limited. All those methods do NOT (!!!) work well with user prompts or additional/multiple U-Net injections. It is IMPOSSIBLE to make those methods work well. We have GIVEN UP those methods. See also the evidence [here](https://github.com/lllyasviel/ControlNet/issues/255), [here](https://github.com/Mikubill/sd-webui-controlnet/issues/547), and much more.**
-
-The ControlNet Shuffle is the one and only one method that has potential to work very well with all other ControlNets and user prompts.
-
-The ControlNet Shuffle is the one and only one method that has potential to work very well with all other ControlNets and user prompts.
-
-The ControlNet Shuffle is the one and only one method that has potential to work very well with all other ControlNets and user prompts.
-
-## ControlNet 1.1 Instruct Pix2Pix
-
-Control Stable Diffusion with Instruct Pix2Pix.
-
-Model file: control_v11e_sd15_ip2p.pth
-
-Config file: control_v11e_sd15_ip2p.yaml
-
-Demo:
-
-    python gradio_ip2p.py
-
-This is a controlnet trained on the [Instruct Pix2Pix dataset](https://github.com/timothybrooks/instruct-pix2pix).
-
-Different from official Instruct Pix2Pix, this model is trained with 50\% instruction prompts and 50\% description prompts. For example, "a cute boy" is a description prompt, while "make the boy cute" is a instruction prompt.
-
-Because this is a ControlNet, you do not need to trouble with original IP2P's double cfg tuning. And, this model can be applied to any base model.
-
-Also, it seems that instructions like "make it into X" works better than "make Y into X".
-
-Non-cherry-picked batch test with random seed 12345 ("make it on fire"):
-
-![img](github_docs/imgs/ip2p_1.png)
-
-Non-cherry-picked batch test with random seed 12345 ("make it winter"):
-
-![img](github_docs/imgs/ip2p_2.png)
-
-We mark this model as "experimental" because it sometimes needs cherry-picking. For example, here is non-cherry-picked batch test with random seed 12345 ("make he iron man"):
-
-![img](github_docs/imgs/ip2p_3.png)
-
-
-## ControlNet 1.1 Inpaint
-
-Control Stable Diffusion with Inpaint.
-
-Model file: control_v11p_sd15_inpaint.pth
-
-Config file: control_v11p_sd15_inpaint.yaml
-
-Demo:
-
-    python gradio_inpaint.py
-
-Some notices:
-
-1. This inpainting ControlNet is trained with 50\% random masks and 50\% random optical flow occlusion masks. This means the model can not only support the inpainting application but also work on video optical flow warping. Perhaps we will provide some example in the future (depending on our workloads).
-2. This gradio demo does not include post-processing. Ideally, you need to post-process the latent image in each diffusion iteration and post-process the image after vae decoding, so that the unmasked area keeps unchanged. However, this is complicated to implement and perhaps a better idea is to make it in a1111. In this gradio example, the outputs are just the original outputs from diffusion, and the unmasked area in your image may change because of the vae or diffusion process.
-
-Non-cherry-picked batch test with random seed 12345 ("a handsome man"):
-
-![img](github_docs/imgs/inpaint_1.png)
-
-## ControlNet 1.1 Tile (Unfinished)
-
-Control Stable Diffusion with Tiles.
-
-Model file: control_v11u_sd15_tile.pth
-
-Config file: control_v11u_sd15_tile.yaml
-
-Demo:
-
-    python gradio_tile.py
-
-More and more people begin to think about different methods to diffuse at tiles so that images can be very big (at 4k or 8k). 
-
-The problem is that, in Stable Diffusion, your prompts will always influent each tile.
-
-For example, if your prompts are "a beautiful girl" and you split an image into 4×4=16 blocks and do diffusion in each block, then you are will get 16 "beautiful girls" rather than "a beautiful girl". This is a well-known problem.
-
-Right now people's solution is to use some meaningless prompts like "clear, clear, super clear" to diffuse blocks. But you can expect that the results will be bad if the denonising strength is high. And because the prompts are bad, the contents are pretty random.
-
-ControlNet Tile is a model to solve this problem. For a given tile, it recognizes what is inside the tile and increase the influence of that recognized semantics, and it also decreases the influence of global prompts if contents do not match.
-
-Non-cherry-picked batch test with random seed 12345 ("a handsome man"):
-
-![img](github_docs/imgs/tile_1.png)
-
-![img](github_docs/imgs/tile_2.png)
-
-You can see that the prompt is "a handsome man" but the model does not paint "a handsome man" on that tree leaves or the hand areas. Instead, it recognizes the tree leaves and hands and paint accordingly.
-
-In this way, ControlNet is able to change the behavior of any Stable Diffusion model to perform diffusion in tiles. 
-
-Note that this is an unfinished model, and we are still looking at better ways to train/use such idea. Right now the model is trained on 200k images with 4k resolution.
+![p](github_page/p21.png)
 
 # Annotate Your Own Data
 
 We provide simple python scripts to process images.
 
-[See a gradio example here](github_docs/annotator.md).
+[See a gradio example here](docs/annotator.md).
+
+# Train with Your Own Data
+
+Training a ControlNet is as easy as (or even easier than) training a simple pix2pix. 
+
+[See the steps here](docs/train.md).
+
+# Citation
+
+    @misc{zhang2023adding,
+      title={Adding Conditional Control to Text-to-Image Diffusion Models}, 
+      author={Lvmin Zhang and Maneesh Agrawala},
+      year={2023},
+      eprint={2302.05543},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+    }
+
+[Arxiv Link](https://arxiv.org/abs/2302.05543)

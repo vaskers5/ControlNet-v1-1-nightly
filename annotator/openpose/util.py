@@ -57,14 +57,14 @@ def padRightDownCorner(img, stride, padValue):
 
     return img_padded, pad
 
-
+# transfer caffe model to pytorch which will match the layer name
 def transfer(model, model_weights):
     transfered_model_weights = {}
     for weights_name in model.state_dict().keys():
         transfered_model_weights[weights_name] = model_weights['.'.join(weights_name.split('.')[1:])]
     return transfered_model_weights
 
-
+# draw the body keypoint and lims
 def draw_bodypose(canvas, candidate, subset):
     H, W, C = canvas.shape
     candidate = np.array(candidate)
