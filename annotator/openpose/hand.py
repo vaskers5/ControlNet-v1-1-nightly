@@ -51,7 +51,7 @@ class Hand(object):
                 data = data.cuda()
 
             with torch.no_grad():
-                output = self.model(data).cpu().numpy()
+                output = self.model(data).cpu().float().numpy()
 
             # extract outputs, resize, and remove padding
             heatmap = np.transpose(np.squeeze(output), (1, 2, 0))  # output 1 is heatmaps
