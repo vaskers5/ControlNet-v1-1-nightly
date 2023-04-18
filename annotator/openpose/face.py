@@ -342,7 +342,7 @@ class Face(object):
             heatmaps = F.interpolate(
                 hs[-1],
                 (H, W),
-                mode='bilinear', align_corners=True).cpu().numpy()[0]
+                mode='bilinear', align_corners=True).cpu().float().numpy()[0]
         return heatmaps
 
     def compute_peaks_from_heatmaps(self, heatmaps):
