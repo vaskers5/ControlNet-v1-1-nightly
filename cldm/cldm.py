@@ -356,6 +356,9 @@ class ControlLDM(LatentDiffusion):
             try: 
                 cond_hint = torch.cat([cond['c_concat'][key]], 1)
                 control = loaded_controlnets[key](x=x_noisy, hint=cond_hint, timesteps=t, context=cond_txt)
+                if key == 'control_sd15_shuffle':
+                    #apply avg pooling for shuffle control
+                    control = [torch.mean(c, dim=(2, 3), keepdim=True) for c in control]
                 if control_wsum is None: control_wsum = [weights[i]*o for o in control]
                 else: control_wsum = [weights[i]*c+cs for c,cs in zip(control,control_wsum)]
             except: 
@@ -364,10 +367,11 @@ class ControlLDM(LatentDiffusion):
         else:
             cond_hint = torch.cat(cond['c_concat'], 1)
             control = self.control_model(x=x_noisy, hint=cond_hint, timesteps=t, context=cond_txt)
-
-        control = [c * scale for c, scale in zip(control, self.control_scales)]
-        if self.global_average_pooling:
-            control = [torch.mean(c, dim=(2, 3), keepdim=True) for c in control]
+        
+        if control is not None:
+            control = [c * scale for c, scale in zip(control, self.control_scales)]
+            if self.global_average_pooling:
+                control = [torch.mean(c, dim=(2, 3), keepdim=True) for c in control]
 
         eps = diffusion_model(x=x_noisy, timesteps=t, context=cond_txt, control=control, only_mid_control=self.only_mid_control)
 
