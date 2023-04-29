@@ -118,7 +118,7 @@ class LineartDetector:
             image = rearrange(image, 'h w c -> 1 c h w')
             line = model(image)[0][0]
 
-            line = line.cpu().numpy()
+            line = line.cpu().float().numpy()
             line = (line * 255.0).clip(0, 255).astype(np.uint8)
 
             return line
