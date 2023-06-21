@@ -314,6 +314,7 @@ class ControlLDM(LatentDiffusion):
         self.only_mid_control = only_mid_control
         self.control_scales = [1.0] * 13
         self.global_average_pooling = global_average_pooling
+        self.low_vram = False
 
 
     @torch.no_grad()
@@ -353,14 +354,18 @@ class ControlLDM(LatentDiffusion):
           weights = np.array([active_models[m]["weight"] for m in active_models.keys()])
           weights = weights/weights.sum()
           for i,key in enumerate(active_models.keys()):
-            try: 
+            try:            
                 cond_hint = torch.cat([cond['c_concat'][key]], 1)
+                if self.low_vram:
+                  loaded_controlnets[key].to(device=cond_hint.device)
                 control = loaded_controlnets[key](x=x_noisy, hint=cond_hint, timesteps=t, context=cond_txt)
                 if key == 'control_sd15_shuffle':
                     #apply avg pooling for shuffle control
                     control = [torch.mean(c, dim=(2, 3), keepdim=True) for c in control]
                 if control_wsum is None: control_wsum = [weights[i]*o for o in control]
                 else: control_wsum = [weights[i]*c+cs for c,cs in zip(control,control_wsum)]
+                if self.low_vram:
+                  loaded_controlnets[key].cpu()
             except: 
                 pass
           control = control_wsum
